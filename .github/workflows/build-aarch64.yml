@@ -1,0 +1,39 @@
+name: Cross Compile aarch64
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Set up Python 3
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          python -m ensurepip --upgrade
+          python -m pip install --upgrade pip
+          pip install clang  # Install the pip clang library
+          sudo apt-get update
+          sudo apt-get install -y libsdl2-dev libzip-dev
+
+      - name: Build gmloader
+        run: |
+          make -f Makefile.gmloader \
+          ARCH=aarch64-linux-gnu \
+          LLVM_FILE=/usr/lib/llvm-11/lib/libclang-11.so.1 \
+          LLVM_INC=/usr/aarch64-linux-gnu/include/c++/10/aarch64-linux-gnu \
+          -j$(nproc)  # Compile with the number of available processors
+
+      - name: Generate libc
+        run: |
+          python3 scripts/generate_libc.py aarch64-linux-gnu \
+          --llvm-includes /usr/aarch64-linux-gnu/include/c++/10/aarch64-linux-gnu \
+          --llvm-library-file "/usr/lib/llvm-11/lib/libclang-11.so.1"
