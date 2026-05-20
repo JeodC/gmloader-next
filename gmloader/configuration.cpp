@@ -18,6 +18,21 @@ void from_json(const json& j, gml_config& c) {
     get_if_exists("disable_texhack", disable_texhack);
     get_if_exists("rumble_scale", rumble_scale);
     get_if_exists("force_platform", force_platform);
+    if (j.contains("plugins") && j.at("plugins").is_array()) {
+        for (auto &item : j.at("plugins")) {
+            plugin_entry e;
+            if (item.is_string()) {
+                e.path = item.get<std::string>();
+                e.config_json = "{}";
+            } else if (item.is_object() && item.contains("path")) {
+                e.path = item.at("path").get<std::string>();
+                e.config_json = item.contains("config")
+                              ? item.at("config").dump()
+                              : "{}";
+            } else continue;
+            c.plugins.push_back(std::move(e));
+        }
+    }
 }
 
 void gml_config::init_defaults(){

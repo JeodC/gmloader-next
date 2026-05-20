@@ -177,13 +177,13 @@ int main(int argc, char *argv[])
     patch_input(libyoyo);
     patch_gamepad(libyoyo);
     patch_mouse(libyoyo);
-    patch_fmod(libyoyo);
     patch_display_mouse_lock(libyoyo);
     patch_gameframe(libyoyo);
     patch_psn(libyoyo);
     patch_steam(libyoyo);
     patch_texture(libyoyo);
     patch_lua(libyoyo);
+    load_plugins();
 
     String *apk_path_arg = (String *)env->NewStringUTF(apk_path.c_str());
     String *save_dir_arg = (String *)env->NewStringUTF(save_dir.c_str());

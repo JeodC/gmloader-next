@@ -1,5 +1,6 @@
 #include <filesystem>
 #include <string>
+#include <vector>
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
@@ -7,6 +8,11 @@
 using json = nlohmann::json;
 
 namespace fs = std::filesystem;
+struct plugin_entry {
+    std::string path;        // resolved via LD_LIBRARY_PATH
+    std::string config_json; // serialized "config" sub-object, or "{}" if absent
+};
+
 struct gml_config {
     std::string save_dir;
     std::string apk_path;
@@ -20,6 +26,7 @@ struct gml_config {
     bool disable_texhack;
     float rumble_scale;
     std::string force_platform;
+    std::vector<plugin_entry> plugins;
 
     friend void from_json(const json& j, gml_config& c);
     void init_defaults();

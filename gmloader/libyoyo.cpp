@@ -26,6 +26,8 @@ ABI_ATTR double (*YYGetReal)(RValue *val, int idx) = NULL;
 ABI_ATTR void (*YYCreateString)(RValue *val, const char *str) = NULL;
 ABI_ATTR routine_t F_YoYo_DrawTextureFlush = NULL;
 ABI_ATTR uint32_t *(*ReadPNGFile)(void *a1, int a2, int *a3, int *a4, char a5) = NULL;
+ABI_ATTR uint32_t *(*ReadQOIFFile)(void *a1, int a2, int *a3, int *a4, char a5) = NULL;
+ABI_ATTR void (*FreeQOIFFile)(unsigned char *) = NULL;
 ABI_ATTR void (*Audio_PrepareGroup)(void*) = NULL;
 ABI_ATTR void (*CThread__start_NS)(CThread *, void *, void *) = NULL;
 ABI_ATTR void (*CThread__start_PcNS)(CThread *, void *, void *, char *) = NULL;
@@ -150,8 +152,22 @@ ABI_ATTR static void alNoop()
 
 ABI_ATTR static void dont_init_extensions()
 {
-    //*Extension_Main_number = 0;
+    // Zero the extension count so later chunks don't try to walk a missing table.
+    if (Extension_Main_number) *Extension_Main_number = 0;
     warning("dont_init_extensions!!!\n");
+}
+
+// FEAT chunk (GMS 2022.x+) references extension state during load.
+ABI_ATTR static void feat_load_stub(unsigned char *a, unsigned int b, unsigned char *c)
+{
+    warning("Intercepted FEAT_Load, skipping.\n");
+}
+
+// Error_Show_Action throws a C++ exception, which our unwind path can't recover.
+// Log the message and continue instead of aborting.
+ABI_ATTR static void error_show_action_stub(const char *msg, bool a, bool b)
+{
+    warning("Error_Show_Action suppressed: %s\n", msg ? msg : "(null)");
 }
 
 ABI_ATTR static void stub_gml(RValue *ret, void *self, void *other, int argc, RValue *args)
@@ -310,6 +326,9 @@ void patch_libyoyo(so_module *mod)
     ENSURE_SYMBOL(mod, Mutex__dtor, "_ZN5MutexD2Ev", "_ZN5MutexD1Ev");
     ENSURE_SYMBOL(mod, New_Room, "New_Room");
     ENSURE_SYMBOL(mod, ReadPNGFile, "_Z11ReadPNGFilePviPiS0_b");
+    // QOIF is GMS 2022.x+ only; older libyoyo.so lacks these symbols.
+    FIND_SYMBOL(mod, ReadQOIFFile, "_Z12ReadQOIFFilePviPiS0_b");
+    FIND_SYMBOL(mod, FreeQOIFFile, "_Z12FreeQOIFFilePh");
     ENSURE_SYMBOL(mod, the_functions, "the_functions");
     ENSURE_SYMBOL(mod, the_numb, "the_numb");
     ENSURE_SYMBOL(mod, g_pGlobal, "g_pGlobal");
@@ -363,6 +382,8 @@ void patch_libyoyo(so_module *mod)
         // hook_symbol(mod, "_Z20Extension_Initializev", (uintptr_t)&dont_init_extensions, 1);
         // hook_symbol(mod, "_Z20Extension_PrePreparev", (uintptr_t)&dont_init_extensions, 1);
         hook_symbol(mod, "_Z14Extension_LoadPhjS_", (uintptr_t)&dont_init_extensions, 1);
+        hook_symbol(mod, "_Z9FEAT_LoadPhjS_", (uintptr_t)&feat_load_stub, 1);
+        hook_symbol(mod, "_Z17Error_Show_ActionPKcbb", (uintptr_t)&error_show_action_stub, 1);
     }
 
     // Hook messages for debug

@@ -1,5 +1,3 @@
-#ifdef USE_FMOD
-
 #include "fmod.hpp"
 #include "fmod_studio.hpp"
 #include <filesystem>
@@ -10,9 +8,11 @@
 #include "platform.h"
 #include "so_util.h"
 #include "libyoyo.h"
-#include "configuration.h"
 
 namespace fs = std::filesystem;
+
+extern "C" void FMOD_SDL_Register(FMOD_SYSTEM *system);
+
 
 static FMOD::System* fmod_system = nullptr;
 static FMOD::Studio::System* fmod_studio_system = nullptr;
@@ -29,7 +29,6 @@ static const char *AccessYYString(const RValue *ret, int index)
     return "";
 }
 
-extern "C" void FMOD_SDL_Register(FMOD_SYSTEM *system);
 ABI_ATTR void fmod_init(RValue *ret, void *self, void *other, int argc, RValue *args)
 {
     ret->kind = VALUE_REAL;
@@ -569,40 +568,3 @@ ABI_ATTR void fmod_event_get_length(RValue *ret, void *self, void *other, int ar
     ret->rvalue.val = static_cast<double>(length);
 }
 
-void patch_fmod(struct so_module *mod)
-{
-    Function_Add("fmod_init", fmod_init, 1, 0);
-    Function_Add("fmod_destroy", fmod_destroy, 0, 0);
-    Function_Add("fmod_bank_load", fmod_bank_load, 1, 0);
-    Function_Add("fmod_update", fmod_update, 0, 0);
-    Function_Add("fmod_event_create_instance", fmod_event_create_instance, 1, 0);
-    Function_Add("fmod_event_instance_play", fmod_event_instance_play, 0, 0);
-    Function_Add("fmod_event_instance_stop", fmod_event_instance_stop, 0, 0);
-    Function_Add("fmod_event_instance_release", fmod_event_instance_release, 0, 0);
-    Function_Add("fmod_event_instance_set_3d_attributes", fmod_event_instance_set_3d_attributes, 3, 0);
-    Function_Add("fmod_set_listener_attributes", fmod_set_listener_attributes, 3, 0);
-    Function_Add("fmod_set_num_listeners", fmod_set_num_listeners, 1, 0);
-    Function_Add("fmod_event_instance_set_parameter", fmod_event_instance_set_parameter, 3, 0);
-    Function_Add("fmod_event_instance_get_parameter", fmod_event_instance_get_parameter, 1, 0);
-    Function_Add("fmod_set_parameter", fmod_set_parameter, 2, 0);
-    Function_Add("fmod_get_parameter", fmod_get_parameter, 1, 0);
-    Function_Add("fmod_event_instance_set_paused", fmod_event_instance_set_paused, 2, 0);
-    Function_Add("fmod_event_instance_get_paused", fmod_event_instance_get_paused, 0, 0);
-    Function_Add("fmod_event_instance_set_paused_all", fmod_event_instance_set_paused_all, 1, 0);
-    Function_Add("fmod_event_one_shot", fmod_event_one_shot, 1, 0);
-    Function_Add("fmod_event_one_shot_3d", fmod_event_one_shot_3d, 0, 0);
-    Function_Add("fmod_event_instance_is_playing", fmod_event_instance_is_playing, 0, 0);
-    Function_Add("fmod_event_instance_get_timeline_pos", fmod_event_instance_get_timeline_pos, 0, 0);
-    Function_Add("fmod_event_instance_set_timeline_pos", fmod_event_instance_set_timeline_pos, 2, 0);
-    Function_Add("fmod_bank_load_sample_data", fmod_bank_load_sample_data, 1, 0);
-    Function_Add("fmod_event_get_length", fmod_event_get_length, 1, 0);
-}
-
-#else
-struct so_module;
-void patch_fmod(struct so_module *mod)
-{
-    /* FMOD not used, do nothing */
-}
-
-#endif

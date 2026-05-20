@@ -175,7 +175,35 @@ static const char* steam_stubs[] = {
     "steam_utils_get_steam_ui_language",
     "steam_utils_is_steam_in_big_picture_mode",
     "steam_utils_is_steam_running_on_steam_deck",
-    "steam_utils_set_game_launcher_mode"
+    "steam_utils_set_game_launcher_mode",
+
+    // Lobby / Matchmaking
+    "steam_lobby_activate_invite_overlay",
+    "steam_lobby_create",
+    "steam_lobby_get_chat_message_data",
+    "steam_lobby_get_chat_message_text",
+    "steam_lobby_get_lobby_id",
+    "steam_lobby_get_member_count",
+    "steam_lobby_get_member_id",
+    "steam_lobby_get_owner_id",
+    "steam_lobby_is_owner",
+    "steam_lobby_join_id",
+    "steam_lobby_leave",
+    "steam_lobby_list_add_string_filter",
+    "steam_lobby_list_get_count",
+    "steam_lobby_list_get_data",
+    "steam_lobby_list_get_lobby_id",
+    "steam_lobby_list_join",
+    "steam_lobby_list_request",
+    "steam_lobby_send_chat_message_buffer",
+    "steam_lobby_set_data",
+    "steam_lobby_set_owner_id",
+
+    // Steam Networking (P2P packets)
+    "steam_net_packet_get_data",
+    "steam_net_packet_get_sender_id",
+    "steam_net_packet_receive",
+    "steam_net_packet_send"
 };
 
 ABI_ATTR void steam_stub(RValue *ret, void *self, void *other, int argc, RValue *args)

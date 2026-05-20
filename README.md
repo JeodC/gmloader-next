@@ -25,8 +25,11 @@ Now build the project for your desired target platforms, the following build opt
 - `LLVM_INC`: Specify the path for LLVM includes for your architecture, e.g.: `aarch64-linux-gnu`.
 - `OPTM`: Specify the optimization flags, e.g.: `-O3`, `-Os` or `-Og -ggdb`.
 - `STATIC_LIBSTDCXX`: Link libstdc++ statically (useful for legacy platforms).
-- `USE_FMOD`: Whether to build FMOD Extension support.
-    - You need to extract fmodstudioapi.tar.gz into `3rdparty/fmod` for FMOD support.
+
+FMOD extension support lives in [`plugins/`](plugins/) as loadable `.so`
+files. Build each plugin separately after extracting the FMOD Studio API SDK
+into `3rdparty/fmod/`: `make -C plugins/<name>`. Per-port `gmloader.json`
+lists the plugins it needs.
 
 ```bash
 make -f Makefile.gmloader ARCH=aarch64-linux-gnu

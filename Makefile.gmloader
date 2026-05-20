@@ -48,20 +48,6 @@ endif
 
 GENERATE+=--llvm-includes ${LLVM_INC}
 
-ifeq (${DEVICE_ARCH},aarch64)
-	FMOD_ARCH=arm64
-else ifeq (${DEVICE_ARCH},armhf)
-	FMOD_ARCH=armhf
-endif
-
-ifeq (${USE_FMOD},1)
-	CFLAGS+=-DUSE_FMOD=1 -I./3rdparty/fmod/api/core/inc -I./3rdparty/fmod/api/studio/inc
-	CXXFLAGS+=-DUSE_FMOD=1 -I./3rdparty/fmod/api/core/inc -I./3rdparty/fmod/api/studio/inc
-
-	LIBS+=-L./3rdparty/fmod/api/core/lib/${FMOD_ARCH} -L./3rdparty/fmod/api/studio/lib/${FMOD_ARCH} -lfmod -lfmodstudio
-	-include 3rdparty/FMOD_SDL.mk
-endif
-
 ifeq (${USE_LUA},1)
 	CFLAGS+=-DUSE_LUA=1
 	-include 3rdparty/lua.mk
