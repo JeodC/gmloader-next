@@ -199,18 +199,30 @@ typedef struct png_info
 // During PreLoadTexture the runtime asks for each texture's dimensions before
 // any pixels are uploaded. When it sees our 2x1 stub, sniff the matching PVR
 // and overwrite W/H so GL state gets sized for the real texture.
+//
+// The runtime processes textures in TXTR order, but only stubs trigger this
+// hook; pages kept inline skip it. We cannot just count hook calls:
+// image_preload_idx must track the TEXTURE index, not the call count. If 
+// <idx>.pvr is missing, that index was kept inline; bump past it and keep 
+// looking. The first PVR we find belongs to the texture the runtime is 
+// currently preloading.
 static void preload_dims_from_pvr(uint32_t *width, uint32_t *height) {
-    fs::path path = ext_pvr_path_for(image_preload_idx);
-    FILE *f = fopen(path.c_str(), "rb");
-    if (!f) {
-        fatal_error("Texture %d metadata preload failure.\n", image_preload_idx);
-        exit(-1);
+    for (int skipped = 0; skipped < 1024; skipped++) {
+        fs::path path = ext_pvr_path_for(image_preload_idx);
+        FILE *f = fopen(path.c_str(), "rb");
+        if (!f) {
+            image_preload_idx++;
+            continue;
+        }
+        fseek(f, 0x18, SEEK_SET);
+        fread(height, 1, 4, f);
+        fread(width,  1, 4, f);
+        fclose(f);
+        image_preload_idx++;
+        return;
     }
-    fseek(f, 0x18, SEEK_SET);
-    fread(height, 1, 4, f);
-    fread(width,  1, 4, f);
-    fclose(f);
-    image_preload_idx++;
+    fatal_error("Texture %d metadata preload failure.\n", image_preload_idx);
+    exit(-1);
 }
 
 uint32_t png_get_IHDR_hook(struct png_struct *png_ptr, png_info *info_ptr, uint32_t *width, uint32_t *height, int *bit_depth, int *color_type, int *interlace_type, int *compression_type, int *filter_type)

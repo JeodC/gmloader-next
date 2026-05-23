@@ -30,6 +30,18 @@ ABI_ATTR void LoadTextureFromPNG_2(uintptr_t texture, int has_mips)
     LoadTextureFromPNG_generic(arg1, arg2, arg3, arg4, (uint32_t*)texture);
 }
 
+// Older libyoyo builds where the Texture struct is tighter.
+// Flags at +0x10, OpenGL TexID at +0x18, PNG payload at +0x48, size at +0x50.
+ABI_ATTR void LoadTextureFromPNG_3(uintptr_t texture, int has_mips)
+{
+    void *arg1 = *(void**)(texture + 0x48);       /* PNG payload address */
+    int arg2 = *(int*)(texture + 0x50);           /* PNG payload size */
+    uint32_t *arg3 = (uint32_t*)(texture + 0x10); /* Address to Flags */
+    uint32_t *arg4 = (uint32_t*)(texture + 0x18); /* Address to OpenGL Texture Id */
+
+    LoadTextureFromPNG_generic(arg1, arg2, arg3, arg4, (uint32_t*)texture);
+}
+
 ABI_ATTR void LoadTextureFromQOIF_1(uintptr_t texture, int has_mips)
 {
     void *arg1 = *(void**)(texture + 0x70);
@@ -48,12 +60,21 @@ ABI_ATTR void LoadTextureFromQOIF_2(uintptr_t texture, int has_mips)
     LoadTextureFromQOIF_generic(arg1, arg2, arg3, arg4, (uint32_t*)texture);
 }
 
+ABI_ATTR void LoadTextureFromQOIF_3(uintptr_t texture, int has_mips)
+{
+    void *arg1 = *(void**)(texture + 0x48);
+    int arg2 = *(int*)(texture + 0x50);
+    uint32_t *arg3 = (uint32_t*)(texture + 0x10);
+    uint32_t *arg4 = (uint32_t*)(texture + 0x18);
+    LoadTextureFromQOIF_generic(arg1, arg2, arg3, arg4, (uint32_t*)texture);
+}
+
 // Detect which texture-struct variant LoadTextureFromXXX expects by scanning
 // its first 40 instructions for the LDR (X-form, immediate) that pulls the
-// payload pointer out of `texture + imm`. imm12=0x70 → variant 1, 0x78 → 2.
+// payload pointer out of `texture + imm`.
 static int hook_load_texture_variant(so_module *mod, uint32_t *entry,
                                      uintptr_t v1_fn, uintptr_t v2_fn,
-                                     const char *tag)
+                                     uintptr_t v3_fn, const char *tag)
 {
     for (uint32_t *cursor = entry; (cursor - entry) < 40; cursor++) {
         uint32_t inst = *cursor;
@@ -67,6 +88,11 @@ static int hook_load_texture_variant(so_module *mod, uint32_t *entry,
         if (imm12 == 0x78) {
             warning("Using Texture Hack %s_2.\n", tag);
             hook_address(mod, (uintptr_t)entry, v2_fn);
+            return 1;
+        }
+        if (imm12 == 0x48) {
+            warning("Using Texture Hack %s_3.\n", tag);
+            hook_address(mod, (uintptr_t)entry, v3_fn);
             return 1;
         }
     }
@@ -90,6 +116,7 @@ void patch_texture(so_module *mod)
     if (!hook_load_texture_variant(mod, LoadTextureFromPNG,
                                    (uintptr_t)&LoadTextureFromPNG_1,
                                    (uintptr_t)&LoadTextureFromPNG_2,
+                                   (uintptr_t)&LoadTextureFromPNG_3,
                                    "LoadTextureFromPNG"))
     {
         fatal_error(" -- Requested texture_hack, but could not find PNG signature.\n");
@@ -103,6 +130,7 @@ void patch_texture(so_module *mod)
         if (!hook_load_texture_variant(mod, LoadTextureFromQOIF,
                                        (uintptr_t)&LoadTextureFromQOIF_1,
                                        (uintptr_t)&LoadTextureFromQOIF_2,
+                                       (uintptr_t)&LoadTextureFromQOIF_3,
                                        "LoadTextureFromQOIF"))
         {
             warning(" -- LoadTextureFromQOIF found but no recognized signature; QOIF texhack disabled.\n");

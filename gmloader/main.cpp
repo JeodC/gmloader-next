@@ -196,14 +196,6 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    if(gmloader_config.show_cursor == 0) {
-        if (SDL_ShowCursor(SDL_DISABLE) < 0) {
-            warning("Cannot disable cursor: %s\n", SDL_GetError());
-        } else {
-            printf("Cursor disabled\n");
-        }
-    }
-
     SDL_Window *sdl_win;
     SDL_GLContext sdl_ctx;
 
@@ -218,6 +210,14 @@ int main(int argc, char *argv[])
     if (sdl_win == NULL) {
         fatal_error("Failed to create SDL Window: %s\n", SDL_GetError());
         return -1;
+    }
+
+    if(gmloader_config.show_cursor == 0) {
+        if (SDL_ShowCursor(SDL_DISABLE) < 0) {
+            warning("Cannot disable cursor: %s\n", SDL_GetError());
+        } else {
+            printf("Cursor disabled\n");
+        }
     }
 
     // Basic OpenGL ES 2.x setup
