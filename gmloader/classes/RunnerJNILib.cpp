@@ -7,7 +7,7 @@
 #include "RunnerJNILib.h"
 #include "libyoyo.h"
 #include "jni/classes/bytebuffer.h"
-#include "video.h"
+#include "plugin_loader.h"
 
 #define MANGLED_CLASSPATH "Java_com_yoyogames_runner_RunnerJNILib_"
 #define CLASS RunnerJNILib
@@ -106,102 +106,116 @@ int RunnerJNILib::OsGetInfo(JNIEnv *env, jclass clz)
     return osinfo;
 }
 
-#ifdef VIDEO_SUPPORT
+// Video JNI methods dispatch to a plugin-registered backend if one is
+// present; otherwise they're no-ops (or return 0 for query methods).
 void RunnerJNILib::VideoOpen(JNIEnv *env, jclass clz, jstring path)
 {
-    video_open_internal(env->GetStringUTFChars(path,NULL));
+    const gml_video_backend_t *vb = get_video_backend();
+    if (vb && vb->open) vb->open(env->GetStringUTFChars(path, NULL));
 }
 
 void RunnerJNILib::VideoClose(JNIEnv *env, jclass clz)
 {
-    video_close_internal();
+    const gml_video_backend_t *vb = get_video_backend();
+    if (vb && vb->close) vb->close();
 }
 
 jboolean RunnerJNILib::VideoDraw(JNIEnv *env, jclass clz, jobject bytebuffer)
 {
-    ByteBuffer* buf=(ByteBuffer*)bytebuffer;
-    return video_draw_internal(buf->address());
+    const gml_video_backend_t *vb = get_video_backend();
+    if (!vb || !vb->draw) return 0;
+    ByteBuffer *buf = (ByteBuffer *)bytebuffer;
+    return vb->draw(buf->address());
 }
 
 void RunnerJNILib::VideoSetVolume(JNIEnv *env, jclass clz, jdouble volume)
 {
-    return video_set_volume_internal(volume);
+    const gml_video_backend_t *vb = get_video_backend();
+    if (vb && vb->set_volume) vb->set_volume(volume);
 }
 
 void RunnerJNILib::VideoSeekTo(JNIEnv *env, jclass clz, jdouble time)
 {
-    return video_seek_to_internal(time);
+    const gml_video_backend_t *vb = get_video_backend();
+    if (vb && vb->seek_to) vb->seek_to(time);
 }
 
 void RunnerJNILib::VideoEnableLoop(JNIEnv *env, jclass clz, jdouble loop)
 {
-    return video_enable_loop_internal(loop);
+    const gml_video_backend_t *vb = get_video_backend();
+    if (vb && vb->enable_loop) vb->enable_loop(loop);
 }
 
 void RunnerJNILib::VideoPause(JNIEnv *env, jclass clz)
 {
-    return video_pause_internal();
+    const gml_video_backend_t *vb = get_video_backend();
+    if (vb && vb->pause) vb->pause();
 }
 
 void RunnerJNILib::VideoResume(JNIEnv *env, jclass clz)
 {
-    return video_resume_internal();
+    const gml_video_backend_t *vb = get_video_backend();
+    if (vb && vb->resume) vb->resume();
 }
 
 jdouble RunnerJNILib::VideoStatus(JNIEnv *env, jclass clz)
 {
-    return video_status_internal();
+    const gml_video_backend_t *vb = get_video_backend();
+    return (vb && vb->status) ? vb->status() : 0.0;
 }
 
 jdouble RunnerJNILib::VideoGetStatus(JNIEnv *env, jclass clz)
 {
-    return video_get_status_internal();
+    const gml_video_backend_t *vb = get_video_backend();
+    return (vb && vb->get_status) ? vb->get_status() : 0.0;
 }
 
 jdouble RunnerJNILib::VideoGetFormat(JNIEnv *env, jclass clz)
 {
-    return video_get_format_internal();
+    const gml_video_backend_t *vb = get_video_backend();
+    return (vb && vb->get_format) ? vb->get_format() : 0.0;
 }
 
 jdouble RunnerJNILib::VideoW(JNIEnv *env, jclass clz)
 {
-    return video_get_width_internal();
+    const gml_video_backend_t *vb = get_video_backend();
+    return (vb && vb->get_width) ? vb->get_width() : 0.0;
 }
 
 jdouble RunnerJNILib::VideoH(JNIEnv *env, jclass clz)
 {
-    return video_get_height_internal();
+    const gml_video_backend_t *vb = get_video_backend();
+    return (vb && vb->get_height) ? vb->get_height() : 0.0;
 }
 
 jdouble RunnerJNILib::VideoGetDuration(JNIEnv *env, jclass clz)
 {
-    return video_get_duration_internal();
+    const gml_video_backend_t *vb = get_video_backend();
+    return (vb && vb->get_duration) ? vb->get_duration() : 0.0;
 }
 
 jdouble RunnerJNILib::VideoGetPosition(JNIEnv *env, jclass clz)
 {
-    return video_get_position_internal();
+    const gml_video_backend_t *vb = get_video_backend();
+    return (vb && vb->get_position) ? vb->get_position() : 0.0;
 }
 
 jdouble RunnerJNILib::VideoGetVolume(JNIEnv *env, jclass clz)
 {
-    return video_get_volume_internal();
+    const gml_video_backend_t *vb = get_video_backend();
+    return (vb && vb->get_volume) ? vb->get_volume() : 0.0;
 }
 
 jdouble RunnerJNILib::VideoIsLooping(JNIEnv *env, jclass clz)
 {
-    return video_is_looping_internal();
+    const gml_video_backend_t *vb = get_video_backend();
+    return (vb && vb->is_looping) ? vb->is_looping() : 0.0;
 }
-
-
-
-#endif // VIDEO_SUPPORT
 
 const ManagedMethod RunnerJNILibManagedMethods[] = {
     REGISTER_STATIC_METHOD(RunnerJNILib, OsGetInfo, "()I"),
     REGISTER_STATIC_METHOD(RunnerJNILib, GamepadAxesValues, "(I)[F"),
     REGISTER_STATIC_METHOD(RunnerJNILib, MoveTaskToBack, "()V"),
-    #ifdef VIDEO_SUPPORT
     REGISTER_STATIC_METHOD(RunnerJNILib, VideoOpen, "(Ljava/lang/String;)V"),
     REGISTER_STATIC_METHOD(RunnerJNILib, VideoClose, "()V"),
     REGISTER_STATIC_METHOD(RunnerJNILib, VideoDraw, "(Ljava/nio/ByteBuffer;)Z"),
@@ -215,11 +229,10 @@ const ManagedMethod RunnerJNILibManagedMethods[] = {
     REGISTER_STATIC_METHOD(RunnerJNILib, VideoW, "()D"),
     REGISTER_STATIC_METHOD(RunnerJNILib, VideoH, "()D"),
     REGISTER_STATIC_METHOD(RunnerJNILib, VideoGetDuration, "()D"),
-    REGISTER_STATIC_METHOD(RunnerJNILib, VideoGetPosition, "()D"), 
+    REGISTER_STATIC_METHOD(RunnerJNILib, VideoGetPosition, "()D"),
     REGISTER_STATIC_METHOD(RunnerJNILib, VideoGetStatus, "()D"),
     REGISTER_STATIC_METHOD(RunnerJNILib, VideoIsLooping, "()D"),
     REGISTER_STATIC_METHOD(RunnerJNILib, VideoGetVolume, "()D"),
-    #endif // VIDEO_SUPPORT
     NULL
 };
 

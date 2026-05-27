@@ -4,15 +4,28 @@
 #include "libyoyo.h"
 #include "configuration.h"
 #include "gml_plugin_api.h"
+#include "plugin_loader.h"
+
+static const gml_video_backend_t *g_video_backend = nullptr;
+
+static void register_video_backend(const gml_video_backend_t *backend)
+{
+    g_video_backend = backend;
+}
+
+const gml_video_backend_t *get_video_backend()
+{
+    return g_video_backend;
+}
 
 static void populate_api(gml_plugin_api_t *api)
 {
-    api->version        = GML_PLUGIN_API_VERSION;
-    api->Function_Add   = Function_Add;
-    api->YYGetInt32     = YYGetInt32;
-    api->YYGetInt64     = YYGetInt64;
-    api->YYGetReal      = YYGetReal;
-    api->YYCreateString = YYCreateString;
+    api->Function_Add           = Function_Add;
+    api->YYGetInt32             = YYGetInt32;
+    api->YYGetInt64             = YYGetInt64;
+    api->YYGetReal              = YYGetReal;
+    api->YYCreateString         = YYCreateString;
+    api->register_video_backend = register_video_backend;
 }
 
 void load_plugins()

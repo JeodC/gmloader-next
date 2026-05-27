@@ -16,7 +16,7 @@
 #include "libyoyo.h"
 #include "configuration.h"
 #include "texture.h"
-#include "video.h"
+#include "plugin_loader.h"
 #include "splash.h"
 
 
@@ -243,13 +243,13 @@ int main(int argc, char *argv[])
     int cont = 1;
     int w, h;
 
-    #ifdef VIDEO_SUPPORT
-    if (video_init(sdl_win, save_dir.c_str()) != 0)
+    const gml_video_backend_t *video_backend = get_video_backend();
+    if (video_backend && video_backend->init &&
+        video_backend->init(sdl_win, save_dir.c_str()) != 0)
     {
         fatal_error("Could not initialize Video Playback.\n");
         return -1;
     }
-    #endif
 
     int sw, sh;
     SDL_GetWindowSize(sdl_win, &sw, &sh);
@@ -259,9 +259,8 @@ int main(int argc, char *argv[])
     setup_ended = 1;
 
     while (cont != 0 && cont != 2 && RunnerJNILib_MoveTaskToBackCalled == 0 && relaunch_flag == 0) {
-        #ifdef VIDEO_SUPPORT
-        video_process();
-        #endif
+        if (video_backend && video_backend->process)
+            video_backend->process();
         if (update_inputs(sdl_win) != 1)
             break;
         SDL_GetWindowSize(sdl_win, &w, &h);

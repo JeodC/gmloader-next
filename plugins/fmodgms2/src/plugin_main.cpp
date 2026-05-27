@@ -71,7 +71,7 @@ BIND(commandreplay_seekToCommand) BIND(commandreplay_seekToTime)
 extern "C" __attribute__((visibility("default")))
 int gml_plugin_register(const gml_plugin_api_t *api, const char *config_json)
 {
-    if (!api || api->version != GML_PLUGIN_API_VERSION)
+    if (!api)
         return -1;
 
     Function_Add   = api->Function_Add;
