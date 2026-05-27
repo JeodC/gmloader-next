@@ -33,6 +33,12 @@ void patch_texture(so_module *mod)
 		return;
 	}
 
+    // No externalized PVRs to load
+    if (!has_externalized_pvrs()) {
+        warning("Texture hack: no externalized PVRs detected, skipping.\n");
+        return;
+    }
+
     uint8_t has_mips = 1;
 	uint32_t *LoadTextureFromPNG = (uint32_t *)so_symbol(mod, "_Z18LoadTextureFromPNGP7Texture10eMipEnable");
 	if (!LoadTextureFromPNG) {

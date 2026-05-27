@@ -36,6 +36,28 @@ typedef struct pvrtc_file {
     uint8_t Data[];
 } __attribute__((packed)) pvrtc_file;
 
+// Probe save_dir/textures/ for any .pvr file. The texhack only matters when
+// the port externalized textures during patching.
+bool has_externalized_pvrs() {
+    fs::path dir = fs::path(gmloader_config.save_dir) / "textures";
+    if (override_apk) {
+        std::string tex_path = gmloader_config.apk_path;
+        if (tex_path.rfind("assets/", 0) == 0)
+            tex_path = tex_path.substr(7);
+        dir /= tex_path;
+    }
+    std::error_code ec;
+    if (!fs::exists(dir, ec) || !fs::is_directory(dir, ec))
+        return false;
+    // Recurse
+    for (auto it = fs::recursive_directory_iterator(dir, ec);
+         !ec && it != fs::recursive_directory_iterator(); ++it) {
+        if (it->is_regular_file(ec) && it->path().extension() == ".pvr")
+            return true;
+    }
+    return false;
+}
+
 // Build the path for the externalized PVR for texture index `idx`.
 static fs::path ext_pvr_path_for(uint32_t idx) {
     if (override_apk) {
