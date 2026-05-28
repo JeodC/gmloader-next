@@ -84,6 +84,9 @@ static void upload_external_pvr(uint32_t idx, int *width, int *height) {
     *width = ext_data->Width;
     *height = ext_data->Height;
 
+    while (glGetError() != GL_NO_ERROR)
+        ;
+
     switch (ext_data->Format) {
     case 0x00: glCompressedTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_RGB_PVRTC_2BPPV1_IMG,  *width, *height, 0, texture_data_size, (void*)texture_data); break;
     case 0x01: glCompressedTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_RGBA_PVRTC_2BPPV1_IMG, *width, *height, 0, texture_data_size, (void*)texture_data); break;
@@ -103,7 +106,8 @@ static void upload_external_pvr(uint32_t idx, int *width, int *height) {
     }
     GLint err = glGetError();
     if (err != GL_NO_ERROR)
-        fatal_error("Failed to upload texture, 0x%04X\n", err);
+        fatal_error("Failed to upload texture %u (%dx%d, fmt 0x%02lX), 0x%04X\n",
+                    idx, *width, *height, ext_data->Format, err);
     free(ext_data);
 }
 
