@@ -18,6 +18,7 @@
 #include "texture.h"
 #include "plugin_loader.h"
 #include "splash.h"
+#include "cursor.h"
 
 
 int relaunch_flag = 0;
@@ -265,8 +266,11 @@ int main(int argc, char *argv[])
             break;
         SDL_GetWindowSize(sdl_win, &w, &h);
         cont = RunnerJNILib::Process(env, 0, w, h, 0, 0, 0, 0, 0, 60);
-        if (RunnerJNILib::canFlip(env, 0))
+        if (RunnerJNILib::canFlip(env, 0)) {
+            if (gmloader_config.software_cursor)
+                cursor_render(sdl_win, w, h);
             SDL_GL_SwapWindow(sdl_win);
+        }
     }
 
     SDL_GL_DeleteContext(sdl_ctx);

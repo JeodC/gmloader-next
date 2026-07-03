@@ -10,6 +10,8 @@ void from_json(const json& j, gml_config& c) {
     get_if_exists("apk_path", apk_path);
     get_if_exists("shader_dir", shader_dir);
     get_if_exists("show_cursor", show_cursor);
+    get_if_exists("software_cursor", software_cursor);
+    get_if_exists("cursor_scale", cursor_scale);
     get_if_exists("disable_controller", disable_controller);
     get_if_exists("disable_depth", disable_depth);
     get_if_exists("disable_extensions", disable_extensions);
@@ -40,6 +42,8 @@ void gml_config::init_defaults(){
     save_dir = "";
     shader_dir = "";
     show_cursor = true;
+    software_cursor = false;
+    cursor_scale = 1.0;
     disable_controller = false;
     disable_depth = false;
     disable_extensions = true;
@@ -76,6 +80,8 @@ void gml_config::show_config(){
     printf("config: apk_path = %s\n", apk_path.c_str());
     printf("config: shader_dir = %s\n", shader_dir.c_str());
     printf("config: show_cursor = %d\n", show_cursor);
+    printf("config: software_cursor = %d\n", software_cursor);
+    printf("config: cursor_scale = %f\n", cursor_scale);
     printf("config: disable_controller = %d\n", disable_controller);
     printf("config: disable_depth = %d\n", disable_depth);
     printf("config: disable_extensions = %d\n", disable_extensions);

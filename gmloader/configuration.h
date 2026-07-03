@@ -18,6 +18,8 @@ struct gml_config {
     std::string apk_path;
     std::string shader_dir;
     bool show_cursor;
+    bool software_cursor;
+    float cursor_scale;
     bool disable_controller;
     bool disable_depth;
     bool disable_extensions;
