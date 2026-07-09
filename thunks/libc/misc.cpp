@@ -1,6 +1,8 @@
 #include <errno.h>
 #include <string.h>
 #include <fcntl.h>
+#include <stdint.h>
+#include <sys/statvfs.h>
 #include <dirent.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -160,6 +162,68 @@ extern "C" ABI_ATTR int __system_property_get_impl(const char *name, char *value
 
 extern "C" ABI_ATTR int __open_2_impl(const char* pathname, int flags) {
   return open(pathname, flags);
+}
+
+// Bionic declares open() variadic; mode is only read when flags ask for it,
+// so a fixed three-argument callee is ABI-compatible on both AAPCS targets.
+extern "C" ABI_ATTR int open_impl(const char* pathname, int flags, mode_t mode) {
+  return open(pathname, flags, mode);
+}
+
+extern "C" ABI_ATTR int open64_impl(const char* pathname, int flags, mode_t mode) {
+#ifdef O_LARGEFILE
+  flags |= O_LARGEFILE;
+#endif
+  return open(pathname, flags, mode);
+}
+
+// Bionic's struct statvfs matches glibc's on LP64, but on ILP32 glibc inserts
+// an extra __f_unused word after f_fsid, so translate field-by-field.
+struct bionic_statvfs {
+  unsigned long f_bsize;
+  unsigned long f_frsize;
+  fsblkcnt_t f_blocks;
+  fsblkcnt_t f_bfree;
+  fsblkcnt_t f_bavail;
+  fsfilcnt_t f_files;
+  fsfilcnt_t f_ffree;
+  fsfilcnt_t f_favail;
+  unsigned long f_fsid;
+  unsigned long f_flag;
+  unsigned long f_namemax;
+#if defined(__LP64__)
+  uint32_t __f_reserved[6];
+#endif
+};
+
+static void statvfs_to_bionic(const struct statvfs *in, struct bionic_statvfs *out) {
+  out->f_bsize = in->f_bsize;
+  out->f_frsize = in->f_frsize;
+  out->f_blocks = in->f_blocks;
+  out->f_bfree = in->f_bfree;
+  out->f_bavail = in->f_bavail;
+  out->f_files = in->f_files;
+  out->f_ffree = in->f_ffree;
+  out->f_favail = in->f_favail;
+  out->f_fsid = in->f_fsid;
+  out->f_flag = in->f_flag;
+  out->f_namemax = in->f_namemax;
+}
+
+extern "C" ABI_ATTR int statvfs_impl(const char* path, struct bionic_statvfs* buf) {
+  struct statvfs st;
+  int ret = statvfs(path, &st);
+  if (ret == 0 && buf)
+    statvfs_to_bionic(&st, buf);
+  return ret;
+}
+
+extern "C" ABI_ATTR int fstatvfs_impl(int fd, struct bionic_statvfs* buf) {
+  struct statvfs st;
+  int ret = fstatvfs(fd, &st);
+  if (ret == 0 && buf)
+    statvfs_to_bionic(&st, buf);
+  return ret;
 }
 
 // Taken from https://github.com/libhybris/libhybris/blob/master/hybris/common/hooks.c

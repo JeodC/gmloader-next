@@ -4,6 +4,8 @@
 #include <string.h>
 #include <signal.h>
 #include <unistd.h>
+#include <errno.h>
+#include <sys/resource.h>
 #include <zip.h>
 
 #include "platform.h"
@@ -81,6 +83,16 @@ int main(int argc, char *argv[])
     {
         fatal_error("Main: Could not determine program name from argv[0]\n");
         return -1;
+    }
+
+    // Texture streaming can hold many transient fds; the default soft limit
+    // (usually 1024) is too tight for texture-heavy games, so lift it to the
+    // hard cap.
+    struct rlimit nofile;
+    if (getrlimit(RLIMIT_NOFILE, &nofile) == 0 && nofile.rlim_cur < nofile.rlim_max) {
+        nofile.rlim_cur = nofile.rlim_max;
+        if (setrlimit(RLIMIT_NOFILE, &nofile) != 0)
+            warning("Main: could not raise RLIMIT_NOFILE: %s\n", strerror(errno));
     }
 
     gmloader_config.init_defaults();

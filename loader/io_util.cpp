@@ -53,8 +53,10 @@ int zip_load_file(struct zip *zip, const char *file, size_t *inflated_bytes, voi
 extern int io_load_file(const char *filename, void **buf, size_t *size)
 {
     SDL_RWops *io = SDL_RWFromFile(filename, "rb");
-    if (!io)
+    if (!io) {
+        warning("io_load_file: can't open '%s': %s\n", filename, SDL_GetError());
         return 0;
+    }
 
     Sint64 sz = SDL_RWsize(io);
     if (sz <= 0)
@@ -63,12 +65,15 @@ extern int io_load_file(const char *filename, void **buf, size_t *size)
     *buf = malloc(sz);
     *size = sz;
 
-    if (!buf)
+    if (!*buf) {
+        warning("io_load_file: out of memory reading '%s' (%lld bytes)\n", filename, (long long)sz);
         goto io_load_file_rw;
+    }
 
     if (SDL_RWread(io, *buf, sz, 1) < 1)
         goto io_load_file_buf;
 
+    SDL_RWclose(io);
     return 1;
 
 io_load_file_buf:
