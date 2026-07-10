@@ -68,7 +68,11 @@ void AudioTrack::stop(JNIEnv *env, jobject obj, jclass clazz)
 void AudioTrack::release(JNIEnv *env, jobject obj, jclass clazz)
 {
     AudioTrack *track = (AudioTrack*)obj;
-    SDL_ClearQueuedAudio(track->deviceId);
+    if (track->deviceId) {
+        SDL_CloseAudioDevice(track->deviceId);
+        track->deviceId = 0;
+    }
+    track->playing = 0;
 }
 
 int AudioTrack::write(JNIEnv *env, jobject obj, jclass clazz, jbyteArray audioData, int offsetInBytes, int sizeInBytes)
