@@ -21,6 +21,7 @@
 #include "plugin_loader.h"
 #include "splash.h"
 #include "cursor.h"
+#include "gamedata_mmap.h"
 
 
 int relaunch_flag = 0;
@@ -196,6 +197,7 @@ int main(int argc, char *argv[])
     patch_steam(libyoyo);
     patch_texture(libyoyo);
     patch_lua(libyoyo);
+    patch_gamedata(libyoyo, apk_path.c_str());
     load_plugins();
 
     String *apk_path_arg = (String *)env->NewStringUTF(apk_path.c_str());

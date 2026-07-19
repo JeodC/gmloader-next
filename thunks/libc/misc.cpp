@@ -14,8 +14,18 @@
 #include <sys/syscall.h>
 #include "platform.h"
 #include "so_util.h"
+#include "gmloader/gamedata_mmap.h"
 
 #include "bionic_file.h"
+
+// game.droid may be handed to the runner as an mmap rather than a heap buffer;
+// intercept its release so the mapping never reaches the host allocator.
+extern "C" ABI_ATTR void free_impl(void *ptr)
+{
+    if (gamedata_mmap_release(ptr))
+        return;
+    free(ptr);
+}
 
 extern "C" ABI_ATTR int dl_iterate_phdr_impl(
                  int (*callback)(struct dl_phdr_info *info,
