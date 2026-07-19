@@ -46,6 +46,7 @@ int foo() { return tls0[0]++; }
 extern DynLibFunction symtable_libc[];
 extern DynLibFunction symtable_zlib[];
 extern DynLibFunction symtable_gles2[];
+extern DynLibFunction symtable_opensles[];
 
 extern double FORCE_PLATFORM;
 
@@ -57,6 +58,7 @@ DynLibFunction *so_dynamic_libraries[32] = {
     symtable_libc,
     symtable_zlib,
     symtable_gles2,
+    symtable_opensles,
     NULL
 };
 
