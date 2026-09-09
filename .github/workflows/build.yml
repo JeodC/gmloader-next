@@ -32,8 +32,15 @@ jobs:
       - name: Install ${{ matrix.arch.name }} dependencies
         run: |
           dpkg --add-architecture ${{ matrix.arch.name }}
-          apt update
-          apt install -y --no-install-recommends python3 git dpkg-dev build-essential binutils python3-clang binutils-${{ matrix.arch.cross }} libstdc++-10-dev-${{ matrix.arch.name }}-cross linux-libc-dev-${{ matrix.arch.name }}-cross make gcc-${{ matrix.arch.cross }} g++-${{ matrix.arch.cross }} libsdl2-dev:${{ matrix.arch.name }} libzip-dev:${{ matrix.arch.name }} ca-certificates
+          SNAP=http://snapshot.debian.org/archive
+          STAMP=20260801T000000Z
+          cat > /etc/apt/sources.list <<EOF
+          deb $SNAP/debian/$STAMP bullseye main
+          deb $SNAP/debian/$STAMP bullseye-updates main
+          deb $SNAP/debian-security/$STAMP bullseye-security main
+          EOF
+          apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Retries=5 update
+          apt-get -o Acquire::Retries=5 install -y --no-install-recommends python3 git dpkg-dev build-essential binutils python3-clang binutils-${{ matrix.arch.cross }} libstdc++-10-dev-${{ matrix.arch.name }}-cross linux-libc-dev-${{ matrix.arch.name }}-cross make gcc-${{ matrix.arch.cross }} g++-${{ matrix.arch.cross }} libsdl2-dev:${{ matrix.arch.name }} libzip-dev:${{ matrix.arch.name }} ca-certificates
 
       - uses: actions/checkout@v4
         with:
@@ -68,8 +75,15 @@ jobs:
       - name: Install ${{ matrix.arch.name }} dependencies
         run: |
           dpkg --add-architecture ${{ matrix.arch.name }}
-          apt update
-          apt install -y --no-install-recommends python3 git dpkg-dev build-essential binutils python3-clang binutils-${{ matrix.arch.cross }} libstdc++-10-dev-${{ matrix.arch.name }}-cross linux-libc-dev-${{ matrix.arch.name }}-cross make gcc-${{ matrix.arch.cross }} g++-${{ matrix.arch.cross }} libsdl2-dev:${{ matrix.arch.name }} libzip-dev:${{ matrix.arch.name }} libavformat-dev:${{ matrix.arch.name }} libavcodec-dev:${{ matrix.arch.name }} libswscale-dev:${{ matrix.arch.name }} libavutil-dev:${{ matrix.arch.name }} libass-dev:${{ matrix.arch.name }} ca-certificates
+          SNAP=http://snapshot.debian.org/archive
+          STAMP=20260801T000000Z
+          cat > /etc/apt/sources.list <<EOF
+          deb $SNAP/debian/$STAMP bullseye main
+          deb $SNAP/debian/$STAMP bullseye-updates main
+          deb $SNAP/debian-security/$STAMP bullseye-security main
+          EOF
+          apt-get -o Acquire::Check-Valid-Until=false -o Acquire::Retries=5 update
+          apt-get -o Acquire::Retries=5 install -y --no-install-recommends python3 git dpkg-dev build-essential binutils python3-clang binutils-${{ matrix.arch.cross }} libstdc++-10-dev-${{ matrix.arch.name }}-cross linux-libc-dev-${{ matrix.arch.name }}-cross make gcc-${{ matrix.arch.cross }} g++-${{ matrix.arch.cross }} libsdl2-dev:${{ matrix.arch.name }} libzip-dev:${{ matrix.arch.name }} libavformat-dev:${{ matrix.arch.name }} libavcodec-dev:${{ matrix.arch.name }} libswscale-dev:${{ matrix.arch.name }} libavutil-dev:${{ matrix.arch.name }} libass-dev:${{ matrix.arch.name }} ca-certificates
 
       - uses: actions/checkout@v4
         with:
