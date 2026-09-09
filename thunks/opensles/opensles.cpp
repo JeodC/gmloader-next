@@ -21,6 +21,18 @@ DEFINE_IID(SL_IID_RECORD)
 DEFINE_IID(SL_IID_ANDROIDSIMPLEBUFFERQUEUE)
 DEFINE_IID(SL_IID_ANDROIDCONFIGURATION)
 
+static const char *iid_name(SLInterfaceID iid)
+{
+    if (iid == SL_IID_ENGINE)                   return "SL_IID_ENGINE";
+    if (iid == SL_IID_PLAY)                     return "SL_IID_PLAY";
+    if (iid == SL_IID_VOLUME)                   return "SL_IID_VOLUME";
+    if (iid == SL_IID_BUFFERQUEUE)              return "SL_IID_BUFFERQUEUE";
+    if (iid == SL_IID_RECORD)                   return "SL_IID_RECORD";
+    if (iid == SL_IID_ANDROIDSIMPLEBUFFERQUEUE) return "SL_IID_ANDROIDSIMPLEBUFFERQUEUE";
+    if (iid == SL_IID_ANDROIDCONFIGURATION)     return "SL_IID_ANDROIDCONFIGURATION";
+    return "unknown";
+}
+
 #define ITF_OBJ(itf, type, member) ((type *)((char *)(itf) - offsetof(type, member)))
 #define QUEUE_DEPTH 16   // buffer-queue depth; Oboe primes with two
 
@@ -243,10 +255,12 @@ static ABI_ATTR SLresult obj_GetInterface(SLObjectItf self, const SLInterfaceID 
     if (object->kind == KIND_PLAYER) {
         sl_player *player = (sl_player *)object;
         if (iid == SL_IID_PLAY)                     { *(void **)pInterface = &player->play_itf;   return SL_RESULT_SUCCESS; }
-        if (iid == SL_IID_ANDROIDSIMPLEBUFFERQUEUE) { *(void **)pInterface = &player->bq_itf;     return SL_RESULT_SUCCESS; }
+        if (iid == SL_IID_ANDROIDSIMPLEBUFFERQUEUE ||
+            iid == SL_IID_BUFFERQUEUE)              { *(void **)pInterface = &player->bq_itf;     return SL_RESULT_SUCCESS; }
         if (iid == SL_IID_VOLUME)                   { *(void **)pInterface = &player->volume_itf; return SL_RESULT_SUCCESS; }
         if (iid == SL_IID_ANDROIDCONFIGURATION)     { *(void **)pInterface = &player->config_itf; return SL_RESULT_SUCCESS; }
     }
+    warning("opensles: GetInterface(%s) unsupported on object kind %d\n", iid_name(iid), object->kind);
     return SL_RESULT_FEATURE_UNSUPPORTED;
 }
 
