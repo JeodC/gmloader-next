@@ -4,6 +4,8 @@
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
+#include <string>
+#include <nlohmann/json.hpp>
 #include "platform.h"
 #include "gml_plugin_api.h"
 #include "dualscreen.h"
@@ -56,6 +58,7 @@ static PFNEGLWAITSYNCKHRPROC pWaitSync;
 static SDL_Window *game_window, *window;
 static SDL_GLContext game_context, context;
 static int opened, width, height;
+static std::string title = "Secondary screen";
 static GLint region_uniform, brightness_uniform;
 
 static struct { SDL_FingerID id; int active; double x, y; } contacts[2];
@@ -252,7 +255,7 @@ EXPORT int ds_open(void)
 
     int display = SDL_GetWindowDisplayIndex(game_window) == 0 ? 1 : 0;
     SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
-    window = SDL_CreateWindow("Second screen",
+    window = SDL_CreateWindow(title.c_str(),
                               SDL_WINDOWPOS_CENTERED_DISPLAY(display), SDL_WINDOWPOS_CENTERED_DISPLAY(display),
                               640, 480, SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN_DESKTOP);
     if (window)
@@ -360,6 +363,12 @@ EXPORT int ds_touch(ds_touch_state *out)
 
 EXPORT int gml_plugin_register(const gml_plugin_api_t *api, const char *config_json)
 {
+    try {
+        auto cfg = nlohmann::json::parse(config_json ? config_json : "{}");
+        if (cfg.contains("title") && cfg["title"].is_string())
+            title = cfg["title"].get<std::string>();
+    } catch (...) {}
+
     SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
     return 0;
 }

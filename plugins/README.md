@@ -31,7 +31,7 @@ extern "C" int gml_plugin_register(const gml_plugin_api_t *api, const char *conf
 
 - [`fmod-gamemaker/`](fmod-gamemaker) -- the `fmod-gamemaker` GML extension (snake_case flat API: `fmod_init`, `fmod_event_one_shot`, ...).
 - [`fmodgms2/`](fmodgms2) -- the community `fmodgms2` extension (camelCase class-style: `studioSystem_initialize`, `eventInstance_start`, ...).
-- [`dualscreen/`](dualscreen) -- a window on the second display for game-specific plugins to draw to. The C API is in [`dualscreen.h`](dualscreen/src/dualscreen.h). List it before the plugin that uses it.
+- [`dualscreen/`](dualscreen) -- a second-screen window for other plugins ([`dualscreen.h`](dualscreen/src/dualscreen.h)), listed before them. Config `title` sets the window title, which ROCKNIX matches to enable the display and its touchscreen.
 
 The FMOD plugins each link their own copy of `FMOD_SDL` and the FMOD Studio API libraries.
 
