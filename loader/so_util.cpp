@@ -328,6 +328,7 @@ static bool has_builtin_lib(std::string filename)
         filename.starts_with("libdl.so") ||
         filename.starts_with("liblog.so") ||
         filename.starts_with("libandroid.so") ||
+        filename.starts_with("libOpenSLES.so") ||
         filename.starts_with("libz.so"))
       return true;
     return false;
@@ -382,7 +383,13 @@ so_module *so_load_module(const char *filename, struct zip *apk, void *vm) {
 
       if (zip_load_file(apk, filepath, &image_size, &buffer, 0))
         goto load_module_success;
-      
+
+      // Runners can do without some dependencies, e.g. liboboe.so
+      if (ret) {
+        warning("Skipping missing module '%s'.\n", current.c_str());
+        continue;
+      }
+
       fatal_error("Failed to load module '%s'.\n", current.c_str());
       return NULL;
 
