@@ -3,6 +3,8 @@
 #include <string.h>
 #include <string>
 #include <stdlib.h>
+#include <strings.h>
+#include <sys/stat.h>
 #include <unordered_map>
 
 #include "platform.h"
@@ -102,6 +104,8 @@ static std::unordered_map<std::string, bool> g_function_map;
 
 ReentrantHook REHPrepareGame = {};
 ReentrantHook REHFunctionAdd = {};
+ReentrantHook REHFileExists = {};
+ABI_ATTR bool (*LoadSave_FileExists)(char *name) = NULL;
 
 /*
 * YoYo's Function_Add used to blindly append functions to the function table.
@@ -127,6 +131,22 @@ void Function_Add_Hook(const char* f_name, routine_t func, int arg_count, char r
     rehook_hook(&REHFunctionAdd);
 
     g_function_map[f_name] = true;
+}
+
+// The runner opens a streamed sound the archive lacks with fopen, as
+// "assets/<name>" under the working directory, but only if it exists first.
+ABI_ATTR static bool LoadSave_FileExists_hook(char *name)
+{
+    rehook_unhook(&REHFileExists);
+    bool found = LoadSave_FileExists(name);
+    rehook_hook(&REHFileExists);
+    if (found)
+        return true;
+
+    struct stat st;
+    const char *ext = strrchr(name, '.');
+    return ext && (strcasecmp(ext, ".ogg") == 0 || strcasecmp(ext, ".mp3") == 0)
+        && stat(name, &st) == 0 && S_ISREG(st.st_mode);
 }
 
 ABI_ATTR int _dbg_csol_print(void *csol, const char *fmt, ...) {
@@ -382,6 +402,13 @@ void patch_libyoyo(so_module *mod)
     ENSURE_SYMBOL(mod, PrepareGame, "_Z11PrepareGamev");
     rehook_new(mod, &REHPrepareGame, (uintptr_t)PrepareGame, (uintptr_t)&PrepareGame_hook);
     rehook_hook(&REHPrepareGame);
+
+    // Let streamed audio be loose files
+    FIND_SYMBOL(mod, LoadSave_FileExists, "_ZN8LoadSave11_FileExistsEPc");
+    if (LoadSave_FileExists) {
+        rehook_new(mod, &REHFileExists, (uintptr_t)LoadSave_FileExists, (uintptr_t)&LoadSave_FileExists_hook);
+        rehook_hook(&REHFileExists);
+    }
 
     // Disable extension support
     FIND_SYMBOL(mod, Extension_Main_number, "Extension_Main_number");
