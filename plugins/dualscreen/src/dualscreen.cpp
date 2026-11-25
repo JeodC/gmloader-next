@@ -1,6 +1,7 @@
 #include <SDL2/SDL.h>
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
+#include <GLES2/gl2.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -8,9 +9,6 @@
 #include <nlohmann/json.hpp>
 #include "platform.h"
 #include "gml_plugin_api.h"
-#include "dualscreen.h"
-
-#define EXPORT extern "C" __attribute__((visibility("default")))
 
 #define GL_FUNCS(X) \
     X(void, GetIntegerv, (GLenum, GLint *)) \
@@ -35,6 +33,9 @@
     X(void, VertexAttribPointer, (GLuint, GLint, GLenum, GLboolean, GLsizei, const void *)) \
     X(void, ActiveTexture, (GLenum)) \
     X(void, BindTexture, (GLenum, GLuint)) \
+    X(void, GenTextures, (GLsizei, GLuint *)) \
+    X(void, CopyTexImage2D, (GLenum, GLint, GLenum, GLint, GLint, GLsizei, GLsizei, GLint)) \
+    X(void, CopyTexSubImage2D, (GLenum, GLint, GLint, GLint, GLint, GLint, GLsizei, GLsizei)) \
     X(void, GetTexParameteriv, (GLenum, GLenum, GLint *)) \
     X(void, TexParameteri, (GLenum, GLenum, GLint)) \
     X(void, Viewport, (GLint, GLint, GLsizei, GLsizei)) \
@@ -57,14 +58,37 @@ static PFNEGLWAITSYNCKHRPROC pWaitSync;
 
 static SDL_Window *game_window, *window;
 static SDL_GLContext game_context, context;
-static int opened, width, height;
+static int width, height, game_interval;
 static std::string title = "Secondary screen";
+static GLuint program, buffer;
 static GLint region_uniform, brightness_uniform;
 
+static struct layer {
+    GLuint texture;
+    int x, y, w, h; // second-screen pixels from the top left
+    float u, v, uw, vh, brightness;
+    int blend;
+} layers[16];
+static int layer_count;
+
+static int swapped;
+static GLuint swap_texture;
+static int swap_w, swap_h;
+
+// Movement since the last DualScreen_Touch call, in second-screen pixels.
+static struct {
+    double dx, dy;             // one-finger drag
+    double zoom;               // pinch, in powers of two
+    double x, y;               // latest position of the first finger
+    double origin_x, origin_y; // where the first finger went down
+    int tapped;                // the finger lifted without moving
+} touch;
 static struct { SDL_FingerID id; int active; double x, y; } contacts[2];
-static ds_touch_state touch;
 static double last_span;
 static int moved;
+
+static double (*GetReal)(RValue *val, int idx);
+static void (*CreateString)(RValue *val, const char *str);
 
 static int load_gl(void)
 {
@@ -84,6 +108,9 @@ static int load_gl(void)
 
 static int build_program(void)
 {
+    if (program)
+        return 1;
+
     static const char *vs =
         "attribute vec2 p; attribute vec2 t; varying vec2 uv;"
         "void main() { gl_Position = vec4(p, 0.0, 1.0); uv = t; }";
@@ -98,39 +125,47 @@ static int build_program(void)
          1,  1, 1, 0,
     };
 
-    GLuint v = pCreateShader(GL_VERTEX_SHADER), f = pCreateShader(GL_FRAGMENT_SHADER), buffer;
+    GLuint v = pCreateShader(GL_VERTEX_SHADER), f = pCreateShader(GL_FRAGMENT_SHADER);
     pShaderSource(v, 1, &vs, NULL);
     pCompileShader(v);
     pShaderSource(f, 1, &fs, NULL);
     pCompileShader(f);
 
     GLint ok = 0;
-    GLuint program = pCreateProgram();
+    program = pCreateProgram();
     pAttachShader(program, v);
     pAttachShader(program, f);
     pBindAttribLocation(program, 0, "p");
     pBindAttribLocation(program, 1, "t");
     pLinkProgram(program);
     pGetProgramiv(program, GL_LINK_STATUS, &ok);
-    if (!ok)
+    if (!ok) {
+        program = 0;
         return 0;
+    }
 
     pGenBuffers(1, &buffer);
     pBindBuffer(GL_ARRAY_BUFFER, buffer);
     pBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_STATIC_DRAW);
-    pEnableVertexAttribArray(0);
-    pEnableVertexAttribArray(1);
-    pVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 16, (void *)0);
-    pVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 16, (void *)8);
 
     pUseProgram(program);
     region_uniform = pGetUniformLocation(program, "region");
     brightness_uniform = pGetUniformLocation(program, "brightness");
     pUniform1i(pGetUniformLocation(program, "image"), 0);
+    return 1;
+}
+
+static void setup_context(void)
+{
+    pBindBuffer(GL_ARRAY_BUFFER, buffer);
+    pEnableVertexAttribArray(0);
+    pEnableVertexAttribArray(1);
+    pVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 16, (void *)0);
+    pVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 16, (void *)8);
+    pUseProgram(program);
     pActiveTexture(GL_TEXTURE0);
     pBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     pClearColor(0, 0, 0, 1);
-    return 1;
 }
 
 static EGLSyncKHR fence(void)
@@ -216,14 +251,24 @@ static void finger_up(int i)
     }
 }
 
+static void reset_touch(void)
+{
+    contacts[0].active = contacts[1].active = 0;
+    touch = {};
+}
+
 static int SDLCALL on_event(void *data, SDL_Event *ev)
 {
     if (ev->type != SDL_FINGERDOWN && ev->type != SDL_FINGERMOTION && ev->type != SDL_FINGERUP)
         return 1;
-    if (ev->tfinger.windowID != SDL_GetWindowID(window))
+    SDL_Window *target = swapped ? game_window : window;
+    if (ev->tfinger.windowID != SDL_GetWindowID(target))
         return 1;
 
-    double x = ev->tfinger.x * width, y = ev->tfinger.y * height;
+    int w = width, h = height;
+    if (swapped)
+        SDL_GL_GetDrawableSize(target, &w, &h);
+    double x = ev->tfinger.x * w, y = ev->tfinger.y * h;
     if (ev->type == SDL_FINGERDOWN) {
         finger_down(ev->tfinger.fingerId, x, y);
         return 1;
@@ -240,20 +285,27 @@ static int SDLCALL on_event(void *data, SDL_Event *ev)
     return 1;
 }
 
-EXPORT int ds_open(void)
+static int second_display(void)
 {
-    if (opened)
-        return window != NULL;
-    opened = 1;
+    SDL_Window *current = game_window ? game_window : SDL_GL_GetCurrentWindow();
+    if (!current || SDL_GetNumVideoDisplays() < 2)
+        return -1;
+    return SDL_GetWindowDisplayIndex(current) == 0 ? 1 : 0;
+}
 
+static int open_window(void)
+{
+    if (window)
+        return 1;
+
+    int display = second_display();
     game_window = SDL_GL_GetCurrentWindow();
     game_context = SDL_GL_GetCurrentContext();
-    if (!game_context || SDL_GetNumVideoDisplays() < 2 || !load_gl()) {
+    if (!game_context || display < 0 || !load_gl()) {
         fprintf(stderr, "dualscreen: no second display\n");
         return 0;
     }
 
-    int display = SDL_GetWindowDisplayIndex(game_window) == 0 ? 1 : 0;
     SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
     window = SDL_CreateWindow(title.c_str(),
                               SDL_WINDOWPOS_CENTERED_DISPLAY(display), SDL_WINDOWPOS_CENTERED_DISPLAY(display),
@@ -274,6 +326,9 @@ EXPORT int ds_open(void)
         return 0;
     }
 
+    setup_context();
+    // SDL's Wayland swap interval is global, not per window
+    game_interval = SDL_GL_GetSwapInterval();
     SDL_GL_SetSwapInterval(0);
     SDL_GL_GetDrawableSize(window, &width, &height);
     SDL_AddEventWatch(on_event, NULL);
@@ -282,22 +337,25 @@ EXPORT int ds_open(void)
     return 1;
 }
 
-EXPORT int ds_ready(void)
+static void close_window(void)
 {
-    return window != NULL;
+    if (!window)
+        return;
+    SDL_DelEventWatch(on_event, NULL);
+    SDL_GL_MakeCurrent(game_window, game_context);
+    SDL_GL_DeleteContext(context);
+    SDL_DestroyWindow(window);
+    SDL_GL_SetSwapInterval(game_interval);
+    context = NULL;
+    window = NULL;
+    layer_count = swapped = 0;
+    reset_touch();
 }
 
-EXPORT void ds_size(int *w, int *h)
-{
-    *w = width;
-    *h = height;
-}
-
-EXPORT GLuint ds_bound_texture(void)
+// Texture attached to the framebuffer the game is drawing to.
+static GLuint bound_texture(void)
 {
     GLint fbo = 0, type = 0, texture = 0;
-    if (!window)
-        return 0;
     pGetIntegerv(GL_FRAMEBUFFER_BINDING, &fbo);
     if (!fbo)
         return 0;
@@ -308,10 +366,8 @@ EXPORT GLuint ds_bound_texture(void)
     return texture;
 }
 
-EXPORT int ds_begin(void)
+static int begin(void)
 {
-    if (!window)
-        return 0;
     EGLSyncKHR sync = fence();
     if (SDL_GL_MakeCurrent(window, context) != 0)
         return 0;
@@ -322,28 +378,28 @@ EXPORT int ds_begin(void)
     return 1;
 }
 
-EXPORT void ds_draw(GLuint texture, int x, int y, int w, int h, float u, float v, float uw, float vh, float brightness, int blend)
+static void draw(const layer &l)
 {
     GLint min, mag;
-    pBindTexture(GL_TEXTURE_2D, texture);
+    pBindTexture(GL_TEXTURE_2D, l.texture);
     pGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, &min);
     pGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, &mag);
     pTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     pTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-    if (blend)
+    if (l.blend)
         pEnable(GL_BLEND);
     else
         pDisable(GL_BLEND);
-    pViewport(x, y, w, h);
-    pUniform4f(region_uniform, u, v, uw, vh);
-    pUniform1f(brightness_uniform, brightness);
+    pViewport(l.x, height - l.y - l.h, l.w, l.h);
+    pUniform4f(region_uniform, l.u, l.v, l.uw, l.vh);
+    pUniform1f(brightness_uniform, l.brightness);
     pDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     pTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, min);
     pTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, mag);
 }
 
-EXPORT void ds_end(void)
+static void end(void)
 {
     EGLSyncKHR sync = fence();
     SDL_GL_SwapWindow(window);
@@ -351,23 +407,181 @@ EXPORT void ds_end(void)
     wait_for(sync);
 }
 
-EXPORT int ds_touch(ds_touch_state *out)
+static void copy_screen(int x, int y, int w, int h)
 {
-    if (!touch.tapped && touch.dx == 0 && touch.dy == 0 && touch.zoom == 0)
-        return 0;
-    *out = touch;
-    touch.dx = touch.dy = touch.zoom = 0;
-    touch.tapped = 0;
-    return 1;
+    GLint bound;
+    pGetIntegerv(GL_TEXTURE_BINDING_2D, &bound);
+    if (!swap_texture)
+        pGenTextures(1, &swap_texture);
+    pBindTexture(GL_TEXTURE_2D, swap_texture);
+    if (w != swap_w || h != swap_h) {
+        // GLES can't copy RGBA from a window without alpha
+        pCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, x, y, w, h, 0);
+        pTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        pTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        pTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        pTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        swap_w = w;
+        swap_h = h;
+    } else {
+        pCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, x, y, w, h);
+    }
+    pBindTexture(GL_TEXTURE_2D, bound);
 }
 
-EXPORT int gml_plugin_register(const gml_plugin_api_t *api, const char *config_json)
+#define EXTENSION(name) static ABI_ATTR void name(RValue *ret, void *self, void *other, int argc, RValue *args)
+
+static void set_real(RValue *ret, double value)
+{
+    ret->kind = VALUE_REAL;
+    ret->rvalue.val = value;
+}
+
+static void screen_size(int *w, int *h)
+{
+    SDL_DisplayMode mode;
+    if (window)
+        SDL_GL_GetDrawableSize(window, &width, &height);
+    *w = width;
+    *h = height;
+    if (!window && second_display() >= 0 && SDL_GetCurrentDisplayMode(second_display(), &mode) == 0) {
+        *w = mode.w;
+        *h = mode.h;
+    }
+}
+
+EXTENSION(DualScreen_Available)
+{
+    set_real(ret, second_display() >= 0);
+}
+
+EXTENSION(DualScreen_Enable)
+{
+    if (GetReal(args, 0) == 1) {
+        set_real(ret, open_window());
+        return;
+    }
+    close_window();
+    set_real(ret, 1);
+}
+
+EXTENSION(DualScreen_Ready)
+{
+    set_real(ret, window != NULL);
+}
+
+EXTENSION(DualScreen_Width)
+{
+    int w, h;
+    screen_size(&w, &h);
+    set_real(ret, w);
+}
+
+EXTENSION(DualScreen_Height)
+{
+    int w, h;
+    screen_size(&w, &h);
+    set_real(ret, h);
+}
+
+EXTENSION(DualScreen_Begin)
+{
+    layer_count = 0;
+    set_real(ret, window != NULL);
+}
+
+EXTENSION(DualScreen_Draw)
+{
+    GLuint texture = window && layer_count < 16 ? bound_texture() : 0;
+    if (texture) {
+        layer &l = layers[layer_count++];
+        l.texture = texture;
+        l.x = lround(GetReal(args, 0));
+        l.y = lround(GetReal(args, 1));
+        l.w = lround(GetReal(args, 2));
+        l.h = lround(GetReal(args, 3));
+        l.u = GetReal(args, 4);
+        l.v = GetReal(args, 5);
+        l.uw = GetReal(args, 6);
+        l.vh = GetReal(args, 7);
+        l.brightness = fmin(1, fmax(0, GetReal(args, 8)));
+        l.blend = GetReal(args, 9) != 0;
+    }
+    set_real(ret, texture != 0);
+}
+
+EXTENSION(DualScreen_End)
+{
+    set_real(ret, 0);
+    if (!window || !layer_count || !begin())
+        return;
+    for (int i = 0; i < layer_count; i++)
+        draw(layers[i]);
+    layer_count = 0;
+    end();
+    set_real(ret, 1);
+}
+
+EXTENSION(DualScreen_Touch)
+{
+    char text[256] = "";
+    if (touch.tapped || touch.dx != 0 || touch.dy != 0 || touch.zoom != 0) {
+        snprintf(text, sizeof(text),
+                 "{\"dx\":%.5f,\"dy\":%.5f,\"zoom\":%.5f,\"tap\":%s,\"x\":%.5f,\"y\":%.5f,\"originX\":%.5f,\"originY\":%.5f}",
+                 touch.dx, touch.dy, touch.zoom, touch.tapped ? "true" : "false", touch.x, touch.y, touch.origin_x, touch.origin_y);
+        touch.dx = touch.dy = touch.zoom = 0;
+        touch.tapped = 0;
+    }
+    CreateString(ret, text);
+}
+
+EXTENSION(DualScreen_Swap)
+{
+    int swap = window && GetReal(args, 0) == 1;
+    if (swap != swapped)
+        reset_touch();
+    swapped = swap;
+    set_real(ret, swapped);
+}
+
+EXTENSION(DualScreen_SwapFrame)
+{
+    int x = GetReal(args, 0), y = GetReal(args, 1), w = GetReal(args, 2), h = GetReal(args, 3);
+    set_real(ret, 0);
+    if (!window || w < 1 || h < 1)
+        return;
+    copy_screen(x, y, w, h);
+    if (!begin())
+        return;
+    float scale = fminf((float)width / w, (float)height / h);
+    int fit_w = lroundf(w * scale), fit_h = lroundf(h * scale);
+    draw({swap_texture, (width - fit_w) / 2, (height - fit_h) / 2, fit_w, fit_h, 0, 1, 1, -1, 1, 0});
+    end();
+    set_real(ret, 1);
+}
+
+extern "C" __attribute__((visibility("default")))
+int gml_plugin_register(const gml_plugin_api_t *api, const char *config_json)
 {
     try {
         auto cfg = nlohmann::json::parse(config_json ? config_json : "{}");
         if (cfg.contains("title") && cfg["title"].is_string())
             title = cfg["title"].get<std::string>();
     } catch (...) {}
+
+    GetReal = api->YYGetReal;
+    CreateString = api->YYCreateString;
+    api->Extension_Add("DualScreen_Available", DualScreen_Available, 0);
+    api->Extension_Add("DualScreen_Enable", DualScreen_Enable, 1);
+    api->Extension_Add("DualScreen_Ready", DualScreen_Ready, 0);
+    api->Extension_Add("DualScreen_Width", DualScreen_Width, 0);
+    api->Extension_Add("DualScreen_Height", DualScreen_Height, 0);
+    api->Extension_Add("DualScreen_Begin", DualScreen_Begin, 0);
+    api->Extension_Add("DualScreen_Draw", DualScreen_Draw, 10);
+    api->Extension_Add("DualScreen_End", DualScreen_End, 0);
+    api->Extension_Add("DualScreen_Touch", DualScreen_Touch, 0);
+    api->Extension_Add("DualScreen_Swap", DualScreen_Swap, 1);
+    api->Extension_Add("DualScreen_SwapFrame", DualScreen_SwapFrame, 4);
 
     SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
     return 0;

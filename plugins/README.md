@@ -33,7 +33,22 @@ extern "C" int gml_plugin_register(const gml_plugin_api_t *api, const char *conf
 
 - [`fmod-gamemaker/`](fmod-gamemaker) -- the `fmod-gamemaker` GML extension (snake_case flat API: `fmod_init`, `fmod_event_one_shot`, ...).
 - [`fmodgms2/`](fmodgms2) -- the community `fmodgms2` extension (camelCase class-style: `studioSystem_initialize`, `eventInstance_start`, ...).
-- [`dualscreen/`](dualscreen) -- a second-screen window for other plugins ([`dualscreen.h`](dualscreen/src/dualscreen.h)), listed before them. Config `title` sets the window title, which ROCKNIX matches to enable the display and its touchscreen.
+- [`dualscreen/`](dualscreen) -- a second-screen window for games that call the functions below. Config `title` sets the window title, which ROCKNIX matches to enable the display and its touchscreen.
+
+### dualscreen
+
+| Function | |
+| --- | --- |
+| `DualScreen_Available()` | Returns 1 if there's a second display. |
+| `DualScreen_Enable(enable)` | Opens or closes the window. Returns 1 on success. |
+| `DualScreen_Ready()` | Returns 1 while the window is open. |
+| `DualScreen_Width()`, `DualScreen_Height()` | Size of the second screen in pixels. |
+| `DualScreen_Begin()` | Starts a frame. Returns 0 if the window isn't open. |
+| `DualScreen_Draw(x, y, width, height, u, v, part_width, part_height, brightness, blend)` | Queues part of the current surface target, up to 16 per frame. `x` to `height` are screen pixels from the top left, `u` to `part_height` are fractions of the surface. Don't change the surface before `DualScreen_End`. |
+| `DualScreen_End()` | Draws the frame. Returns 1 on success. |
+| `DualScreen_Touch()` | Returns touches since the last call as JSON, or an empty string: `dx` and `dy` (drag), `zoom` (pinch, in powers of two), `tap`, `x` and `y` (first finger), `originX` and `originY` (where it went down). |
+| `DualScreen_Swap(enable)` | Reads touches from the game's window instead of the second screen. |
+| `DualScreen_SwapFrame(x, y, width, height)` | Copies part of the game's window to the second screen. `y` counts from the bottom. Reset the surface target first. |
 
 The FMOD plugins each link their own copy of `FMOD_SDL` and the FMOD Studio API libraries.
 
