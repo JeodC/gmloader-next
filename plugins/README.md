@@ -27,6 +27,8 @@ extern "C" int gml_plugin_register(const gml_plugin_api_t *api, const char *conf
 
 `api` carries function pointers for `Function_Add`, `YYGetInt32/64/Real`, and `YYCreateString` resolved out of libyoyo. Return 0 on success.
 
+`Extension_Add` replaces one of the game's extension functions. YYC games need `"disable_extensions": false` for it, and their other extension functions return 0.
+
 ## Existing plugins
 
 - [`fmod-gamemaker/`](fmod-gamemaker) -- the `fmod-gamemaker` GML extension (snake_case flat API: `fmod_init`, `fmod_event_one_shot`, ...).

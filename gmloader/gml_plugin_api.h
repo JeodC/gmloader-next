@@ -43,6 +43,7 @@ typedef struct gml_plugin_api {
     void     (*YYCreateString)(RValue *val, const char *str);
 
     void     (*register_video_backend)(const gml_video_backend_t *backend);
+    void     (*Extension_Add)(const char *name, routine_t func, int argc);
 } gml_plugin_api_t;
 
 typedef int (*gml_plugin_register_fn)(const gml_plugin_api_t *api, const char *config_json);
